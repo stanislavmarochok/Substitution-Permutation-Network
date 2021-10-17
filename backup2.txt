@@ -1,0 +1,198 @@
+#include <iostream>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+using namespace std;
+
+#define rounds 10
+
+void sbox(uint16_t sBoxes[16], uint16_t state[4])
+{
+    state[0] =
+          (sBoxes[(state[0] >> 0)  & (uint16_t)0x000f] << 0)
+        ^ (sBoxes[(state[0] >> 4)  & (uint16_t)0x000f] << 4)
+        ^ (sBoxes[(state[0] >> 8)  & (uint16_t)0x000f] << 8)
+        ^ (sBoxes[(state[0] >> 12) & (uint16_t)0x000f] << 12);
+
+    state[1] =
+          (sBoxes[(state[1] >> 0)  & (uint16_t)0x000f] << 0)
+        ^ (sBoxes[(state[1] >> 4)  & (uint16_t)0x000f] << 4)
+        ^ (sBoxes[(state[1] >> 8)  & (uint16_t)0x000f] << 8)
+        ^ (sBoxes[(state[1] >> 12) & (uint16_t)0x000f] << 12);
+
+    state[2] =
+          (sBoxes[(state[2] >> 0)  & (uint16_t)0xf] << 0)
+        ^ (sBoxes[(state[2] >> 4)  & (uint16_t)0xf] << 4)
+        ^ (sBoxes[(state[2] >> 8)  & (uint16_t)0xf] << 8)
+        ^ (sBoxes[(state[2] >> 12) & (uint16_t)0xf] << 12);
+
+    state[3] =
+          (sBoxes[(state[3] >> 0)  & (uint16_t)0xf] << 0)
+        ^ (sBoxes[(state[3] >> 4)  & (uint16_t)0xf] << 4)
+        ^ (sBoxes[(state[3] >> 8)  & (uint16_t)0xf] << 8)
+        ^ (sBoxes[(state[3] >> 12) & (uint16_t)0xf] << 12);
+}
+
+void permute(uint16_t state[4])
+{
+    uint16_t out[4] = { 0 };
+
+    out[0] ^= state[0] & 0x1111;
+    out[1] ^= state[0] & 0x2222;
+    out[2] ^= state[0] & 0x4444;
+    out[3] ^= state[0] & 0x8888;
+
+    out[1] ^= state[1] & 0x1111;
+    out[2] ^= state[1] & 0x2222;
+    out[3] ^= state[1] & 0x4444;
+    out[0] ^= state[1] & 0x8888;
+
+    out[2] ^= state[2] & 0x1111;
+    out[3] ^= state[2] & 0x2222;
+    out[0] ^= state[2] & 0x4444;
+    out[1] ^= state[2] & 0x8888;
+
+    out[3] ^= state[3] & 0x1111;
+    out[0] ^= state[3] & 0x2222;
+    out[1] ^= state[3] & 0x4444;
+    out[2] ^= state[3] & 0x8888;
+
+    state[0] = out[0]; state[1] = out[1]; state[2] = out[2]; state[3] = out[3];
+}
+
+void permuteInverse(uint16_t out[4])
+{
+    // inverse
+    uint16_t originalValue[4] = { 0 };
+
+    originalValue[0] ^= out[0] & 0x1111;
+    originalValue[0] ^= out[1] & 0x2222;
+    originalValue[0] ^= out[2] & 0x4444;
+    originalValue[0] ^= out[3] & 0x8888;
+
+    originalValue[1] ^= out[1] & 0x1111;
+    originalValue[1] ^= out[2] & 0x2222;
+    originalValue[1] ^= out[3] & 0x4444;
+    originalValue[1] ^= out[0] & 0x8888;
+
+    originalValue[2] ^= out[2] & 0x1111;
+    originalValue[2] ^= out[3] & 0x2222;
+    originalValue[2] ^= out[0] & 0x4444;
+    originalValue[2] ^= out[1] & 0x8888;
+
+    originalValue[3] ^= out[3] & 0x1111;
+    originalValue[3] ^= out[0] & 0x2222;
+    originalValue[3] ^= out[1] & 0x4444;
+    originalValue[3] ^= out[2] & 0x8888;
+
+    out[0] = originalValue[0]; out[1] = originalValue[1]; out[2] = originalValue[2]; out[3] = originalValue[3];
+}
+
+int encrypt(uint8_t data[], uint8_t key[], uint16_t sBox[16])
+{
+    uint16_t state[4], rk[4];
+
+    memcpy(state, data, sizeof(state));
+    memcpy(rk,    key,  sizeof(rk));
+
+    for (int round = 0; round < rounds; round++)
+    {
+        // key addition
+        for (int i = 0; i < 4; i++)
+            state[i] ^= rk[i];
+        
+        sbox(sBox, state);
+        permute(state);
+    }
+
+    memcpy(data, state, sizeof(state));
+    return 1;
+}
+
+int decrypt(uint8_t data[8], uint8_t key[8], uint16_t sBoxInverse[16])
+{
+    uint16_t state[4], rk[4];
+
+    memcpy(state, data, sizeof(state));
+    memcpy(rk, key, sizeof(rk));
+
+    for (int round = 0; round < rounds; round++)
+    {
+        permuteInverse(state);
+        sbox(sBoxInverse, state);
+
+        // key addition
+        for (int i = 0; i < 4; i++)
+            state[i] ^= rk[i];
+    }
+
+    memcpy(data, state, sizeof(state));
+
+    return 1;
+}
+
+void test_encryption(uint8_t key[], uint16_t sBox[]) {
+    int block_size = 16;
+    int sequences = 1 << 16;
+
+    clock_t begin = clock();
+    for (int i = 0; i < sequences; i++) {
+        uint8_t data[2] = { (uint8_t)(i >> 8), (uint8_t)i };
+        encrypt(data, key, sBox);
+    }
+    clock_t end = clock();
+
+    double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+    FILE* fp = fopen("speed_test_encryption_result.txt" , "w");
+    if (fp == NULL) {
+        perror("Unable to open file!");
+        exit(1);
+    }
+
+    fprintf(fp, "Doing own SPN encryption on %d size blocks: %d in %fs (%d in 3s).\n", block_size, sequences, time_spent, sequences * int(3 / time_spent));
+    fprintf(fp, "Doing AES-128-ECB for 3s on 16 size blocks: 152315266 AES-128-ECB's in 3.00s\n");
+    fclose(fp);
+}
+
+void test_bruteforce_decryption(uint16_t sBoxInverse[]) {
+    // "my ciphertext" encrypted with key "slov"
+    uint8_t ciphertext[] = { 0xf4, 0xe6, 0x53, 0x31, 0xeb, 0x93, 0x00, 0xbb, 0x72, 0x74, 0x65, 0x78, 0x74 };
+    const int key_length = 4;
+    uint8_t key[key_length];
+    int64_t sequences = static_cast<int64_t>(1) << (8 * key_length);
+
+    clock_t begin = clock();
+    for (int64_t i = 0; i < sequences; i++) {
+        for (int j = 0; j < key_length; j++) key[j] = (uint8_t)(i >> (8 * (key_length - j - 1)));
+        decrypt(ciphertext, key, sBoxInverse);
+    }
+    clock_t end = clock();
+
+    double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+    FILE* fp = fopen("speed_test_decryption_result.txt", "w");
+    if (fp == NULL) {
+        perror("Unable to open file!");
+        exit(1);
+    }
+
+    fprintf(fp, "Doing own SPN decryption with key length %d in %fs.\n", key_length, time_spent);
+    fclose(fp);
+}
+
+int main() {
+    //                             0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   A,   B,   C,   D,   E,   F
+    uint16_t sBox[16]        = { 0x5, 0xA, 0x0, 0x9, 0x3, 0x6, 0x1, 0xB, 0x8, 0xC, 0xD, 0x2, 0x4, 0xF, 0x7, 0xE };
+    uint16_t sBoxInverse[16] = { 0x2, 0x6, 0xB, 0x4, 0xC, 0x0, 0x5, 0xE, 0x8, 0x3, 0x1, 0x7, 0x9, 0xA, 0xF, 0xD };
+    uint8_t key[8] = { 's', 'l', 'o', 'v' };
+
+    //test_encryption(key, sBox);
+    
+    /*uint8_t data[] = { 'm', 'y', ' ', 'c', 'i', 'p', 'h', 'e', 'r', 't', 'e', 'x', 't'};
+    encrypt(data, key, sBox);
+    for (int i = 0; i < sizeof(data); i++) printf("%02x", data[i]);*/
+
+    test_bruteforce_decryption(sBoxInverse);
+
+    return 0;
+}
