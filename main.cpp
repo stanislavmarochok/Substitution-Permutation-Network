@@ -5,7 +5,7 @@
 
 using namespace std;
 
-#define rounds 10
+#define rounds 4
 
 void sbox(uint16_t sBoxes[16], uint16_t state[4])
 {
@@ -132,56 +132,72 @@ int decrypt(uint8_t data[8], uint8_t key[8], uint16_t sBoxInverse[16])
     return 1;
 }
 
-void test_encryption(uint8_t key[], uint16_t sBox[]) {
+int test_encryption_internal(uint8_t key[], uint16_t sBox[]) {
     bool saveResults = false;
-    
+
     int block_size = 16;
-    int sequences = 1 << 16;
+    int64_t sequences = static_cast<int64_t>(1) << 32;
 
     clock_t begin = clock();
-    for (int i = 0; i < sequences; i++) {
-        uint8_t data[2] = { (uint8_t)(i >> 8), (uint8_t)i };
-        encrypt(data, key, sBox);
-    }
-    clock_t end = clock();
-
-    double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-    
-    if (saveResults) {
-        FILE* fp = fopen("speed_test_encryption_result.txt", "w");
-        if (fp == NULL) {
-            perror("Unable to open file!");
-            exit(1);
+    for (uint64_t i = 0; i < sequences; i++) {
+        for (uint64_t j = 0; j < sequences; j++) {
+            double time_spent = (double)(clock() - begin) / CLOCKS_PER_SEC;
+            if (time_spent > 3)
+                return int(i) * sequences + int(j);
+            uint8_t data[16];
+            for (int x = 0; x < 8; x++) data[x] = (uint8_t)(i >> (8 * (8 - x - 1)));
+            for (int x = 0; x < 8; x++) data[x + 8] = (uint8_t)(j >> (8 * (8 - x - 1)));
+            encrypt(data, key, sBox);
         }
-
-        fprintf(fp, "Doing own SPN encryption on %d size blocks: %d in %fs (%d in 3s).\n", block_size, sequences, time_spent, sequences * int(3 / time_spent));
-        fprintf(fp, "Doing AES-128-ECB for 3s on 16 size blocks: 152315266 AES-128-ECB's in 3.00s\n");
-        fclose(fp);
     }
+    return 0;
 }
 
-void test_bruteforce_decryption(uint16_t sBoxInverse[]) {
-    // "my ciphertext" encrypted with key "slov"
-    uint8_t ciphertext[] = { 0xf4, 0xe6, 0x53, 0x31, 0xeb, 0x93, 0x00, 0xbb, 0x72, 0x74, 0x65, 0x78, 0x74 };
-    const int key_length = 4;
-    uint8_t key[key_length];
-    int64_t sequences = static_cast<int64_t>(1) << (8 * key_length);
+void test_encryption(uint8_t key[], uint16_t sBox[]) {
+    int n = test_encryption_internal(key, sBox);
 
-    clock_t begin = clock();
-    for (int64_t i = 0; i < sequences; i++) {
-        for (int j = 0; j < key_length; j++) key[j] = (uint8_t)(i >> (8 * (key_length - j - 1)));
-        decrypt(ciphertext, key, sBoxInverse);
-    }
-    clock_t end = clock();
-
-    double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-    FILE* fp = fopen("speed_test_decryption_result.txt", "w");
+    FILE* fp = fopen("speed_test_encryption_result_16_size_block_optimized_4_rounds.txt", "w");
     if (fp == NULL) {
         perror("Unable to open file!");
         exit(1);
     }
 
-    fprintf(fp, "Doing own SPN decryption with key length %d in %fs.\n", key_length, time_spent);
+    fprintf(fp, "Doing own SPN encryption on 16 size blocks: %d in 3s.\n", n);
+    fprintf(fp, "Doing AES-128-ECB for 3s on 16 size blocks: 152315266 AES-128-ECB's in 3.00s\n");
+    fclose(fp);
+}
+
+int test_bruteforce_decryption_internal(uint16_t sBoxInverse[]) {
+    // 128 bitovy zasifrovany text
+    uint8_t ciphertext[] = { 0x8d, 0x15, 0x28, 0x30, 0xa8, 0x79, 0x8c, 0xd6, 0x38, 0x39, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35 };
+
+    int64_t sequences = static_cast<int64_t>(1) << 32;
+
+    clock_t begin = clock();
+    for (uint64_t i = 0; i < sequences; i++) {
+        for (uint64_t j = 0; j < sequences; j++) {
+            double time_spent = (double)(clock() - begin) / CLOCKS_PER_SEC;
+            if (time_spent > 3)
+                return int(i) * sequences + int(j);
+            uint8_t key[16];
+            for (int x = 0; x < 8; x++) key[x] = (uint8_t)(i >> (8 * (8 - x - 1)));
+            for (int x = 0; x < 8; x++) key[x + 8] = (uint8_t)(j >> (8 * (8 - x - 1)));
+            decrypt(ciphertext, key, sBoxInverse);
+        }
+    }
+}
+
+void test_bruteforce_decryption(uint16_t sBoxInverse[]) {
+    int n = test_bruteforce_decryption_internal(sBoxInverse);
+
+    FILE* fp = fopen("speed_test_decryption_result_16_size_block_optimized.txt", "w");
+    if (fp == NULL) {
+        perror("Unable to open file!");
+        exit(1);
+    }
+
+    fprintf(fp, "Doing own SPN decryption on 16 size blocks: %d in 3s.\n", n);
+    fprintf(fp, "Doing AES-128-ECB for 3s on 16 size blocks: 152315266 AES-128-ECB's in 3.00s\n");
     fclose(fp);
 }
 
@@ -189,13 +205,15 @@ int main() {
     //                             0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   A,   B,   C,   D,   E,   F
     uint16_t sBox[16]        = { 0x5, 0xA, 0x0, 0x9, 0x3, 0x6, 0x1, 0xB, 0x8, 0xC, 0xD, 0x2, 0x4, 0xF, 0x7, 0xE };
     uint16_t sBoxInverse[16] = { 0x2, 0x6, 0xB, 0x4, 0xC, 0x0, 0x5, 0xE, 0x8, 0x3, 0x1, 0x7, 0x9, 0xA, 0xF, 0xD };
-    uint8_t key[8] = { 's', 'l', 'o', 'v' };
+    uint8_t key[] = { 's', 'l', 'o', 'v' };
 
     test_encryption(key, sBox);
     
-    /*uint8_t data[] = { 'm', 'y', ' ', 'c', 'i', 'p', 'h', 'e', 'r', 't', 'e', 'x', 't'};
+    /*
+    uint8_t data[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '1', '2', '3', '4', '5' };
     encrypt(data, key, sBox);
-    for (int i = 0; i < sizeof(data); i++) printf("%02x", data[i]);*/
+    for (int i = 0; i < sizeof(data); i++) printf("%02x", data[i]);
+    */
 
     //test_bruteforce_decryption(sBoxInverse);
 

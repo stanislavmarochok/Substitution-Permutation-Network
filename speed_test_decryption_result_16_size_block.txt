@@ -1,0 +1,2 @@
+Doing own SPN decryption on 16 size blocks: 4113412 in 3s.
+Doing AES-128-ECB for 3s on 16 size blocks: 152315266 AES-128-ECB's in 3.00s

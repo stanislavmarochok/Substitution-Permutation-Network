@@ -1,2 +1,9 @@
 ﻿  main.cpp
+D:\Other\Study\Ing\3 semester\I-NKS\zadanie-04\spn\spn\main.cpp(142,28): warning C4018: '<': signed/unsigned mismatch
+D:\Other\Study\Ing\3 semester\I-NKS\zadanie-04\spn\spn\main.cpp(143,32): warning C4018: '<': signed/unsigned mismatch
+D:\Other\Study\Ing\3 semester\I-NKS\zadanie-04\spn\spn\main.cpp(146,43): warning C4244: 'return': conversion from 'int64_t' to 'int', possible loss of data
+D:\Other\Study\Ing\3 semester\I-NKS\zadanie-04\spn\spn\main.cpp(177,28): warning C4018: '<': signed/unsigned mismatch
+D:\Other\Study\Ing\3 semester\I-NKS\zadanie-04\spn\spn\main.cpp(178,32): warning C4018: '<': signed/unsigned mismatch
+D:\Other\Study\Ing\3 semester\I-NKS\zadanie-04\spn\spn\main.cpp(181,43): warning C4244: 'return': conversion from 'int64_t' to 'int', possible loss of data
+D:\Other\Study\Ing\3 semester\I-NKS\zadanie-04\spn\spn\main.cpp(188): warning C4715: 'test_bruteforce_decryption_internal': not all control paths return a value
   spn.vcxproj -> D:\Other\Study\Ing\3 semester\I-NKS\zadanie-04\spn\Debug\spn.exe
